@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyScript CSV 折れ線グラフメーカー</title>
+    
+    <!-- PyScriptのコアモジュールを読み込み -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 20px; 
+            max-width: 800px; 
+            margin: auto; 
+            background-color: #f0f4f8;
+        }
+        .container { 
+            background: #ffffff; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
+        }
+        input[type="file"] { 
+            margin: 20px 0; 
+            display: block; 
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #plot-area { 
+            margin-top: 20px; 
+            background: #fafafa; 
+            border: 2px dashed #cbd5e1; 
+            border-radius: 8px;
+            min-height: 400px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+        }
+        .message { color: #64748b; font-weight: 500;}
+        .error { color: #ef4444; font-weight: 500;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📊 CSVから折れ線グラフを作成</h2>
+        <p>お手元のCSVファイルを選択してください。<br>
+        <small>※1列目がX軸、2列目以降がY軸のデータとして描画されます。</small></p>
+        
+        <!-- ファイル選択UI -->
+        <input type="file" id="csv-file" accept=".csv">
+        
+        <!-- グラフ描画エリア -->
+        <div id="plot-area">
+            <span class="message">ここにグラフが表示されます</span>
+        </div>
+    </div>
+
+    <!-- Pythonのパッケージ設定 -->
+    <py-config>
+        packages = ["pandas", "matplotlib", "japanize-matplotlib"]
+    </py-config>
+
+    <!-- Pythonの処理ロジック -->
+    <script type="py">
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import japanize_matplotlib  # 日本語文字化け対策
+        import io
+        from pyscript import display, when, document
+
+        # HTMLのid="csv-file"でchangeイベントが起きたら実行される
+        @when("change", "#csv-file")
+        async def process_file(event):
+            plot_area = document.getElementById("plot-area")
+            plot_area.innerHTML = "<span class='message'>データを読み込み、グラフを描画中...</span>"
+            
+            # ファイルが選択されたか確認
+            file_list = event.target.files
+            if not file_list:
+                plot_area.innerHTML = "<span class='message'>ファイルが選択されていません</span>"
+                return
+            
+            # 選択された最初のファイルを取得
+            file = file_list.item(0)
+            
+            try:
+                # ブラウザ内でファイルのテキストを非同期に読み込む
+                text = await file.text()
+                
+                # PandasでテキストをCSVとして解釈
+                df = pd.read_csv(io.StringIO(text))
+                
+                if len(df.columns) < 2:
+                    plot_area.innerHTML = "<span class='error'>エラー: CSVにはX軸とY軸のために最低2つの列が必要です。</span>"
+                    return
+
+                # グラフの枠組みを作成
+                fig, ax = plt.subplots(figsize=(10, 5))
+                x_col = df.columns[0] # 1列目をX軸に
+                
+                # 2列目以降を順番にプロット
+                for col in df.columns[1:]:
+                    ax.plot(df[x_col], df[col], marker='o', label=col)
+                
+                # グラフの装飾
+                ax.set_xlabel(x_col)
+                ax.set_ylabel("値")
+                ax.set_title(f"データ推移: {file.name}")
+                ax.legend()
+                ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # X軸のラベルが重ならないように傾ける
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                
+                # 描画エリアに表示 (append=Falseで前回のグラフを上書き)
+                display(fig, target="plot-area", append=False)
+                
+                # メモリ解放
+                plt.close(fig)
+                
+            except Exception as e:
+                plot_area.innerHTML = f"<span class='error'>エラーが発生しました: {str(e)}</span>"
+    </script>
+</body>
+</html>
