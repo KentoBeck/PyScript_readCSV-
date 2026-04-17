@@ -32,6 +32,22 @@
             width: 100%;
             box-sizing: border-box;
         }
+        .btn {
+            background-color: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            display: block;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
         #plot-area { 
             margin-top: 20px; 
             background: #fafafa; 
@@ -41,6 +57,7 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
+            text-align: center;
         }
         .message { color: #64748b; font-weight: 500;}
         .error { color: #ef4444; font-weight: 500;}
@@ -55,6 +72,8 @@
         <!-- ファイル選択UI -->
         <input type="file" id="csv-file" accept=".csv">
         
+        <button id="plot-btn" class="btn">Plot</button>
+
         <!-- グラフ描画エリア -->
         <div id="plot-area">
             <span class="message">ここにグラフが表示されます</span>
@@ -63,33 +82,49 @@
 
     <!-- Pythonのパッケージ設定 -->
     <py-config>
-        packages = ["pandas", "matplotlib", "japanize-matplotlib"]
+        packages = ["pandas", "matplotlib"]
     </py-config>
 
     <!-- Pythonの処理ロジック -->
     <script type="py">
         import pandas as pd
         import matplotlib.pyplot as plt
-        import japanize_matplotlib  # 日本語文字化け対策
         import io
+        import os
+        import matplotlib.font_manager as fm
+        from pyodide.http import pyfetch
         from pyscript import display, when, document
 
-        # HTMLのid="csv-file"でchangeイベントが起きたら実行される
-        @when("change", "#csv-file")
+        # HTMLのid="plot-btn"でclickイベントが起きたら実行される
+        @when("click", "#plot-btn")
         async def process_file(event):
             plot_area = document.getElementById("plot-area")
-            plot_area.innerHTML = "<span class='message'>データを読み込み、グラフを描画中...</span>"
+            
+            # ファイル入力要素を取得
+            csv_input = document.getElementById("csv-file")
+            file_list = csv_input.files
             
             # ファイルが選択されたか確認
-            file_list = event.target.files
-            if not file_list:
-                plot_area.innerHTML = "<span class='message'>ファイルが選択されていません</span>"
+            if not file_list or len(file_list) == 0:
+                plot_area.innerHTML = "<span class='error'>ファイルが選択されていません</span>"
                 return
+
+            plot_area.innerHTML = "<span class='message'>データを読み込み、グラフを描画中...<br>（初回は日本語フォントのダウンロードに数秒かかります）</span>"
             
             # 選択された最初のファイルを取得
             file = file_list.item(0)
             
             try:
+                # 日本語フォントをダウンロードして設定 (初回のみ)
+                font_path = "BIZUDGothic-Regular.ttf"
+                if not os.path.exists(font_path):
+                    url = "https://raw.githubusercontent.com/googlefonts/morisawa-biz-ud-gothic/main/fonts/ttf/BIZUDGothic-Regular.ttf"
+                    response = await pyfetch(url)
+                    with open(font_path, "wb") as f:
+                        f.write(await response.bytes())
+                    fm.fontManager.addfont(font_path)
+                    plt.rcParams['font.family'] = fm.FontProperties(fname=font_path).get_name()
+
                 # ブラウザ内でファイルのテキストを非同期に読み込む
                 text = await file.text()
                 
